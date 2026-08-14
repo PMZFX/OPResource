@@ -26,6 +26,7 @@ if (filterUnavailable) {
     const canServe = createResourcePathChecker({
         resourceRoot: __dirname,
         externalRoot: externalIconRoot,
+        layersRoot: layersroot,
     });
     const result = filterResourceIndex(source, canServe);
     filteredResourceIndex = Buffer.from(result.text, 'utf8');
