@@ -1,0 +1,11 @@
+.git
+node_modules
+temp
+*.png
+*.dds
+*.a3m
+*.xm
+opp-resource.jpeg
+README*
+docker-compose.yml
+res-site.conf
