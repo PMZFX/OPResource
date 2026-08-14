@@ -10,10 +10,30 @@ const express = require('express');
 const fs = require('fs');
 const stream = require('stream');
 const gzip = require('zlib');
+const { createResourcePathChecker, filterResourceIndex } = require('./lib/resource-index');
 
 const app = express();
 const port = process.env.PORT || 1337;
 const layerspath = process.env.GAMMA_LAYERS_NEW || 'lang0000/layers/GAMMA_LAYERS_NEW';
+const layersroot = path.isAbsolute(layerspath) ? layerspath : path.join(__dirname, layerspath);
+const externalIconRoot = process.env.RESOURCE_ICON_ROOT;
+const filterUnavailable = process.env.RESOURCE_FILTER_UNAVAILABLE === '1';
+const resourceIndexPath = path.join(__dirname, 'resource_0.dat');
+let filteredResourceIndex = null;
+
+if (filterUnavailable) {
+    const source = fs.readFileSync(resourceIndexPath, 'utf8');
+    const canServe = createResourcePathChecker({
+        resourceRoot: __dirname,
+        externalRoot: externalIconRoot,
+    });
+    const result = filterResourceIndex(source, canServe);
+    filteredResourceIndex = Buffer.from(result.text, 'utf8');
+    console.log('Filtered unavailable resource entries:', result.removed.length);
+    for (const entry of result.removed) {
+        console.log('Bundled-client fallback:', entry.name, entry.path);
+    }
+}
 
 // Log on any file access
 app.use(function(req, res, next) {
@@ -29,6 +49,10 @@ app.use(function(req, res, next) {
 });
 
 // By default, we give resources along the request path
+if (externalIconRoot) {
+    app.use('/lang0000', express.static(path.resolve(externalIconRoot), { fallthrough: true }));
+}
+
 app.use('/lang0000', express.static('lang0000', { fallthrough: true }));
 
 // Replace the not found images with the default.
@@ -76,7 +100,7 @@ function ProcessReq(layer, request, responce)
     }
 
     // Collecting the path to the file with raw data.
-    const bin = path.join(__dirname, layerspath, layer + '.' + zone + '.bin');
+    const bin = path.join(layersroot, layer + '.' + zone + '.bin');
     console.log('Client hit', layer, bin);
 
     // This should compress and transfer the file on the fly.
@@ -111,6 +135,10 @@ app.get('/', function(req, res, next) {
     if (!fs.existsSync(index)) {
         console.log('File does not exist:', index);
         return res.status(400).send();
+    }
+    if (filteredResourceIndex) {
+        res.type('application/octet-stream').send(filteredResourceIndex);
+        return;
     }
     res.sendFile(index);
 });
